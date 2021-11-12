@@ -1,0 +1,138 @@
+(calyxtract_chocolate) ----> version v1.0
+
+       Tab > COM Test (function  implemented)
+                    > LED indicator
+                    > ports List dropdown
+                    > Baudrate list dropdown
+                    > connect port button
+                    > update button
+                    > send button
+                    > clear button
+                    > output layout 
+                    > input layout 
+                     
+           > Initialization (function  implemented)
+                        > system start and stop button 
+           
+           > loader
+                        > select device and input duration and iteration with submit button (function need to implement)
+           > orentation (function  implemented)
+                        > podstatus > Accept and Reject Button 
+                        > roration status > clock wise and counterclock wise Button
+                        > channel > Shift in Button
+	   > detection
+           > sorting
+
+(calyxtract_chocolate) ----> version v1.1
+
+       nav bar >user name, port LED, Bin LED, Home Button, Configuration Button, Login Button
+        
+       page 1 > System 
+              > ON Button
+       
+       Page 2 > Select Chilly Type 
+              > 3 dropdown to select
+                    > color
+                    > height
+                    > width
+                    > submit Button
+      Page 3 > system to Start
+              > Go button
+   
+      page 4 > Feed analytics
+               > Guage Meter
+               > Chilly Progress Bar
+               > 2 LCD Display
+                 > Accepted 
+                 > Rejected 
+               > Off Button
+
+     page 5 > configuration
+              > ports List dropdown
+              > Baudrate list dropdown
+              > connect port button
+              > update button
+              > Refresh Button
+
+     page 6 > Login
+              > username input
+              > password input
+              > submit button
+              > sign up button
+              > forgot password button Button
+
+     page 7 > sign up
+              > username input
+              > password input
+              > confirm password input
+              > submit button
+
+     page 7 > forgot password
+              > username input
+              > new password input
+              > confirm password input
+              > submit button
+               
+       Tab > COM Test (function  implemented)
+                    > ports List dropdown
+                    > Baudrate list dropdown
+                    > connect port button
+                    > update button
+                    > Refresh Button
+                    > send button
+                    > clear button
+                    > output layout 
+                    > input layout 
+                     
+           > Initialization (function  implemented)
+                        > system start and stop button 
+           
+           > loader
+                        > select device and input duration and iteration with submit button (function need to implement)
+           > orentation (function  implemented)
+                        > podstatus > Accept and Reject Button 
+                        > roration status > clock wise and counterclock wise Button
+                        > channel > Shift in Button
+	   > detection
+           > sorting
+
+
+(calyxtract_vanilla) ------> version v1.1  
+             
+       Tab > system 
+                        > system start, stop button and Conveyer speed with normal text display (function need to implement)
+           > loader
+                        > select device and input duration and iteration with submit button (function need to implement)
+           > orentation
+                        > input slave id (function need to implement)
+                        > podstatus > Accept and Reject Button
+                        > roration status > clock wise and counterclock wise Button
+                        > channel selection > channel 1 2 and 3 Button
+	   > detection 
+                       > input slave id (function need to implement)
+                       > image view button
+                       > cutting test button
+            > sorting  
+                       > input slave id (function need to implement)
+                       > good Bin > start button
+                       > Bad Bin > start button
+
+(calyxtract_vanilla) --> version v1.2
+
+       Tab > system 
+                        > system start, stop button and Conveyer speed with lcd display (function implemented)
+           > loader
+                        > select device and input duration and iteration with submit button 
+           > orentation
+                        > input slave id (function  implemented)
+                        > podstatus > Accept and Reject Button
+                        > roration status > clock wise and counterclock wise Button
+                        > channel selection > channel 1 2 and 3 Button
+	   > detection 
+                       > input slave id (function need to  implement)
+                       > image view button
+                       > cutting test button
+            > sorting  
+                       > input slave id (function  implemented)
+                       > good Bin > start button
+                       > Bad Bin > start button
