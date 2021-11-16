@@ -1,7 +1,7 @@
 import sys
 import bcrypt
 from PyQt5.QtWidgets import *
-from calyxtract_App import *
+from calyxtract_GUI import *
 from serialfunc import serialFunc
 
 
@@ -14,9 +14,6 @@ class MiApp(QMainWindow):
         self.ui.stackedWidget.setCurrentWidget(self.ui.homePage)
         # Serial
         self.serial = serialFunc()
-
-        # Threads
-        #self.thread = {}
 
         self.ui.baudrateList.addItems(self.serial.baudratesDIC.keys())
         self.ui.baudrateListconfig.addItems(self.serial.baudratesDIC.keys())
@@ -35,6 +32,8 @@ class MiApp(QMainWindow):
         self.ui.goBtn.clicked.connect(self.open_analytispage)
         self.ui.config_Btn.clicked.connect(self.open_configpage)
         self.ui.connectBtnconfig.clicked.connect(self.connect_config)
+        self.ui.refreshBtnconfig.clicked.connect(self.update_ports)
+        self.ui.updateBtnconfig.clicked.connect(self.update_config)
         self.ui.login_Btn.clicked.connect(self.open_loginpage)
         self.ui.submitBtnL.clicked.connect(self.loginAccess)
         self.ui.signupBtn.clicked.connect(self.open_signuppage)
@@ -126,6 +125,8 @@ class MiApp(QMainWindow):
     def loginAccess(self):
         username = self.ui.userInputL.text()
         password = self.ui.pwdInputL.text()
+        self.ui.userInputL.clear()
+        self.ui.pwdInputL.clear()
         if not len(username or password) < 1:
             if True:
                 db = open("db/database.txt", "r")
@@ -143,6 +144,7 @@ class MiApp(QMainWindow):
                         hashed = data[username].strip('b')
                         hashed = hashed.replace("'", "")
                         hashed = hashed.encode('utf-8')
+                        print(bcrypt.checkpw(password.encode(), hashed))
                         try:
                             if bcrypt.checkpw(password.encode(), hashed):
                                 print("Login success!")
@@ -153,16 +155,22 @@ class MiApp(QMainWindow):
                                 self.ui.user.setText(' ' + username.capitalize())
                             else:
                                 print("Wrong password")
+                                self.show_popup("Wrong password", "Error", QMessageBox.Critical)
                         except:
                             print("Incorrect passwords or username")
+                            self.show_popup("Incorrect passwords or username", "Error", QMessageBox.Critical)
                     else:
                         print("Username doesn't exist")
+                        self.show_popup("Username doesn't exist", "Error", QMessageBox.Critical)
                 except:
                     print("Password or username doesn't exist")
+                    self.show_popup("Password or username doesn't exist", "Error", QMessageBox.Critical)
             else:
                 print("Error logging into the system")
+                self.show_popup("Error logging into the system", "Error", QMessageBox.Critical)
         else:
             print("Please attempt login again")
+            self.show_popup("Please attempt login again", "Error", QMessageBox.Critical)
 
     def logout(self):
         self.ui.stackedWidget.setCurrentWidget(self.ui.loginPage)
@@ -173,6 +181,9 @@ class MiApp(QMainWindow):
         username = self.ui.userInputS.text()
         password1 = self.ui.pwdInputS.text()
         password2 = self.ui.confirmpwdInputS.text()
+        self.ui.userInputS.clear()
+        self.ui.pwdInputS.clear()
+        self.ui.confirmpwdInputS.clear()
         db = open("db/database.txt", "r")
         d = []
         for i in db:
@@ -185,8 +196,10 @@ class MiApp(QMainWindow):
             if not username == '':
                 if len(username) < 1:
                     print("Please provide a username")
+                    self.show_popup("Please provide a username", "Error", QMessageBox.Critical)
                 elif username in d:
                     print("Username exists")
+                    self.show_popup("Username exists", "Error", QMessageBox.Critical)
                 else:
                     if password1 == password2:
                         password1 = password1.encode('utf-8')
@@ -195,17 +208,23 @@ class MiApp(QMainWindow):
                         db = open("db/database.txt", "a")
                         db.write(username + ", " + str(password1) + "\n")
                         print("User created successfully!")
+                        self.show_popup("User created successfully!", "Error", QMessageBox.Critical)
                         print("Please login to proceed:")
                     # print(texts)
                     else:
                         print("Passwords do not match")
+                        self.show_popup("Passwords do not match", "Error", QMessageBox.Critical)
         else:
             print("Password too short")
+            self.show_popup("Password too short", "Error", QMessageBox.Critical)
 
     def forgot_pwd(self):
         username = self.ui.userInputF.text()
         password1 = self.ui.pwdInputF.text()
         password2 = self.ui.confirmpwdInputS_2.text()
+        self.ui.userInputF.clear()
+        self.ui.pwdInputF.clear()
+        self.ui.confirmpwdInputS_2.clear()
         db = open("db/database.txt", "r")
         d = []
         for i in db:
@@ -219,9 +238,9 @@ class MiApp(QMainWindow):
             if not username == '':
                 if len(username) < 1:
                     print("Please provide a username")
+                    self.show_popup("Please provide a username", "Error", QMessageBox.Critical)
                 elif username in d:
                     print(username)
-                    print("Username exists")
                     user = username
                     for number, line in enumerate(db):
                         if user in line:
@@ -236,13 +255,24 @@ class MiApp(QMainWindow):
                                 list_of_line[line_number] = username + ", " + str(password1) + "\n"
                                 db = open("db/database.txt", "w")
                                 db.writelines(list_of_line)
-                                print("User created successfully!")
+                                print("Created successfully!")
+                                self.show_popup("Created successfully!", "Error", QMessageBox.Critical)
                                 print("Please login to proceed:")
                             # print(texts)
                             else:
                                 print("Passwords do not match")
+                                self.show_popup("Passwords do not match", "Error", QMessageBox.Critical)
         else:
             print("Password too short")
+            self.show_popup("Password too short", "Error", QMessageBox.Critical)
+
+    def show_popup(self, text, title, icon):
+        self.msgBox = QMessageBox()
+        self.msgBox.setText(text)
+        self.msgBox.setWindowTitle(title)
+        self.msgBox.setIcon(icon)
+        self.msgBox.setStandardButtons(QMessageBox.Ok)
+        self.msgBox.exec_()
 
     def update_ports(self):
         self.serial.update_ports()
@@ -265,7 +295,7 @@ class MiApp(QMainWindow):
             if self.serial.serialPort.is_open:
                 self.ui.connectBtnconfig.setText('Disconnect')
                 icon = QtGui.QIcon()
-                icon.addPixmap(QtGui.QPixmap("image/Green LED.png LED.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
+                icon.addPixmap(QtGui.QPixmap("image/Green LED.png"), QtGui.QIcon.Normal, QtGui.QIcon.On)
                 self.ui.ledPort.setIcon(icon)
                 # print("Me conecté")
 
@@ -359,7 +389,7 @@ class MiApp(QMainWindow):
             self.ui.connectBtn.setText('Connect')
             self.ui.connectBtn.setChecked(False)
 
-    def update_user(self):
+    def update_config(self):
         port = self.ui.portList.currentText()
         baud = self.ui.baudrateList.currentText()
         self.ui.portListconfig.setCurrentText(port)
