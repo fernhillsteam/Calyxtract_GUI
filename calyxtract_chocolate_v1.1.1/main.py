@@ -1,3 +1,5 @@
+import cgitb
+cgitb.enable(format = 'text')
 import sys
 import bcrypt
 from PyQt5.QtWidgets import *
