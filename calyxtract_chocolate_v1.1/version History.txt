@@ -59,7 +59,8 @@
               > password input
               > submit button
               > sign up button
-              > forgot password button Button
+              > forgot password Button
+              > And Alert popup message
 
      page 7 > sign up
               > username input
@@ -95,6 +96,16 @@
                         > channel > Shift in Button
 	   > detection
            > sorting
+
+(calyxtract_chocolate) ----> version v1.1.1
+               
+          >Title Text 
+                    >Font size changed according to linux device
+          >tabwidget 
+                    >Adjusted according to screen requirement
+          >logout button
+                    >icon and name are showing fine in button
+ 
 
 
 (calyxtract_vanilla) ------> version v1.1  
