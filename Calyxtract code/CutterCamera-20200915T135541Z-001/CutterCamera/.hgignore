@@ -1,0 +1,13 @@
+syntax: glob
+*.obj
+*.pp
+Debug
+.launches
+*.bak
+*.orig
+*.patch
+targetConfigs
+doc
+*.bmp
+*.py
+*.old

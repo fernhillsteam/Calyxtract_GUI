@@ -1,0 +1,111 @@
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#define TARGET_IS_TM4C129_RA1
+
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "inc/hw_ints.h"
+#include "inc/hw_timer.h"
+#include "inc/hw_udma.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/gpio.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/rom.h"
+#include "driverlib/rom_map.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/timer.h"
+#include "driverlib/udma.h"
+#include "dbg.h"
+#include "motor.h"
+
+
+//static const uint32_t pwm_load_values[5] = { 75000, 12500, 5000, 5000, 5000 };
+//static const uint32_t pwm_load_values[5] = { 25000, 9375, 7500, 5625, 7500 };
+//static const uint32_t pwm_load_values[5] = { 37500, 9375, 7500, 5625, 9375 };
+//static const uint32_t pwm_load_values[5] = { 75000, 9375, 7500, 5625, 9375 };
+static uint32_t pwm_load_values[10] = { 62500, 9375, 7500, 7500, 5625, 5625, 5625, 5625, 7500, 7500 };
+static uint_fast8_t pwm_load_idx = 0;
+
+void motor_init(void)
+{
+
+}
+
+void motor_start(void)
+{
+	uint8_t pr;
+	uint16_t ilr;
+
+	TimerMatchSet(TIMER1_BASE, TIMER_A, (200*8)-1);
+
+	pwm_load_idx = 0;
+	pr = pwm_load_values[pwm_load_idx] >> 16;
+	TimerPrescaleSet(TIMER1_BASE, TIMER_B, 0);
+	ilr = pwm_load_values[pwm_load_idx] & 0xFFFFU;
+	TimerLoadSet(TIMER1_BASE, TIMER_B, ilr);
+
+	pr = pwm_load_values[pwm_load_idx] >> 17;
+	TimerPrescaleMatchSet(TIMER1_BASE, TIMER_B, 0);
+	ilr = (pwm_load_values[pwm_load_idx] >> 1) & 0xFFFFU;
+	TimerMatchSet(TIMER1_BASE, TIMER_B, ilr);
+
+	MAP_uDMAChannelTransferSet(UDMA_CH6_TIMER2A|UDMA_PRI_SELECT,
+							UDMA_MODE_BASIC,
+							&pwm_load_values[1],
+							&HWREG(TIMER1_BASE + TIMER_O_TBILR),
+							9);
+
+	//ROM_uDMAChannelEnable(UDMA_CH6_TIMER2A);
+
+	// Start edge count
+	TimerEnable(TIMER1_BASE, TIMER_A);
+	// Start PWM
+	TimerEnable(TIMER1_BASE, TIMER_B);
+	// Start timer to handle PWM ramp
+	TimerEnable(TIMER2_BASE, TIMER_A);
+}
+
+void motor_ramp_timer_handler(void)
+{
+	uint8_t pr;
+	uint16_t ilr;
+
+	ROM_TimerIntClear(TIMER2_BASE, TIMER_TIMA_TIMEOUT);
+	ROM_TimerIntClear(TIMER2_BASE, TIMER_TIMA_TIMEOUT);
+
+	++pwm_load_idx;
+	if (pwm_load_idx >= 10)
+	{
+		// Stop Ramp Timer
+		ROM_TimerDisable(TIMER2_BASE, TIMER_A);
+		ROM_TimerIntClear(TIMER2_BASE, TIMER_TIMA_TIMEOUT);
+	}
+	else
+	{
+		pr = pwm_load_values[pwm_load_idx] >> 16;
+		TimerPrescaleSet(TIMER1_BASE, TIMER_B, pr);
+		ilr = pwm_load_values[pwm_load_idx] & 0xFFFFU;
+		TimerLoadSet(TIMER1_BASE, TIMER_B, ilr);
+
+		pr = pwm_load_values[pwm_load_idx] >> 17;
+		TimerPrescaleMatchSet(TIMER1_BASE, TIMER_B, pr);
+		ilr = (pwm_load_values[pwm_load_idx] >> 1) & 0xFFFFU;
+		TimerMatchSet(TIMER1_BASE, TIMER_B, ilr);
+	}
+}
+
+void motor_pulse_count_handler(void)
+{
+	ROM_TimerIntClear(TIMER1_BASE, TIMER_CAPA_MATCH);
+	ROM_TimerIntClear(TIMER1_BASE, TIMER_CAPA_MATCH);
+
+	// Stop PWM Timer
+	ROM_TimerDisable(TIMER1_BASE, TIMER_B);
+
+	// Stop Ramp Timer
+	ROM_TimerDisable(TIMER2_BASE, TIMER_A);
+
+
+}

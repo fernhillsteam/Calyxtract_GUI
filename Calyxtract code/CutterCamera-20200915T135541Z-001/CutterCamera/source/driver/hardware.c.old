@@ -1,0 +1,711 @@
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#define TARGET_IS_TM4C129_RA1
+
+#include "inc/hw_i2c.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "inc/hw_pwm.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/i2c.h"
+#include "driverlib/pwm.h"
+#include "driverlib/gpio.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/uart.h"
+#include "driverlib/rom.h"
+#include "driverlib/rom_map.h"
+#include "ov7670.h"
+#include "hardware.h"
+
+
+static void i2c_init(void);
+static void uart_init(void);
+static void gpio_init(void);
+static void isr_init(void);
+static void dma_init(void);
+static void pwm_init(void);
+
+static uint32_t g_ui32SysClock;
+static volatile uint32_t i2c_mcs;
+
+void uart_puts(char * str);
+void uart_putc(char c);
+void uart_put_u32h(uint32_t w);
+void uart_put_u16h(uint16_t w);
+void uart_put_u8h(uint8_t w);
+bool i2c_master_busy(uint32_t base);
+uint32_t i2c_master_err(uint32_t base);
+
+uint32_t i2c_rx(uint8_t reg);
+uint8_t read_sccb(uint8_t reg);
+
+#define I2C_DATA				GPIO_PIN_5
+#define I2C_CLK					GPIO_PIN_4
+#define I2C_PORT_BASE			GPIO_PORTB_BASE
+#define I2C_DELAY_BIT_BANG		500000
+
+
+void dbg(void)
+{
+	uint8_t tmp;
+
+	for (;;)
+	{
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0xA);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+		GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0x1);
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0xB);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+		GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0x0);
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0x1);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0x1C);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0x1D);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0x17);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0x18);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = ov7670_read_reg(0x19);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+	}
+}
+void hw_init(void)
+{
+	// Setup Clock
+	g_ui32SysClock = MAP_SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ |
+	                                             SYSCTL_OSC_MAIN |
+	                                             SYSCTL_USE_PLL |
+	                                             SYSCTL_CFG_VCO_480), 120000000);
+
+	// Init peripherals
+	uart_init();
+	uart_puts("Cutter Camera\r\n");
+
+	gpio_init();
+	pwm_init();
+	i2c_init();
+	ov7670_init();
+	dbg();
+}
+
+static void i2c_init(void)
+{
+#if 1
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C5);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_I2C5))
+		;
+
+	GPIOPinConfigure(GPIO_PB4_I2C5SCL);
+	GPIOPinConfigure(GPIO_PB5_I2C5SDA);
+
+	GPIOPinTypeI2CSCL(GPIO_PORTB_BASE, GPIO_PIN_4);
+	GPIOPinTypeI2C(GPIO_PORTB_BASE, GPIO_PIN_5);
+
+	I2CMasterInitExpClk(I2C5_BASE, g_ui32SysClock, false);
+#endif
+#if 0
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_I2C5);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_I2C5))
+		;
+	//SysCtlPeripheralReset(SYSCTL_PERIPH_I2C5);
+
+	GPIOPinConfigure(GPIO_PB4_I2C5SCL);
+	GPIOPinConfigure(GPIO_PB5_I2C5SDA);
+
+	GPIOPinTypeI2CSCL(GPIO_PORTB_BASE, GPIO_PIN_4);
+	GPIOPinTypeI2C(GPIO_PORTB_BASE, GPIO_PIN_5);
+
+	I2CMasterInitExpClk(I2C5_BASE, g_ui32SysClock, false);
+
+	//I2CMasterSlaveAddrSet(I2C5_BASE, 0x21, false);
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(GPIO_PORTG_BASE, GPIO_PIN_0, GPIO_PIN_0);
+	GPIOPinWrite(GPIO_PORTG_BASE, GPIO_PIN_1, 0x0);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG*200);
+
+	uint8_t tmp;
+
+	for (;;)
+	{
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0xA);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+		GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0x1);
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0xB);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+		GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0x0);
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0x1);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0x1C);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0x1D);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0x17);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0x18);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = i2c_rx(0x19);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+	}
+#endif
+#if 0
+
+	GPIOPinTypeGPIOOutputOD(GPIO_PORTB_BASE, GPIO_PIN_4);
+	GPIOPinTypeGPIOOutputOD(GPIO_PORTB_BASE, GPIO_PIN_5);
+
+	GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_4, GPIO_PIN_4);
+	GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_5, GPIO_PIN_5);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(GPIO_PORTG_BASE, GPIO_PIN_0, GPIO_PIN_0);
+	GPIOPinWrite(GPIO_PORTG_BASE, GPIO_PIN_1, 0x0);
+
+	SysCtlDelay(500000*200);
+
+	uint8_t tmp;
+
+	for (;;)
+	{
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0xA);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0xB);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0x1);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0x1C);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0x1D);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0x17);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0x18);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+
+		SysCtlDelay(I2C_DELAY_BIT_BANG*10);
+		tmp = read_sccb(0x19);
+		uart_put_u8h(tmp);
+		uart_puts("\r\n");
+	}
+#endif
+}
+
+static void uart_init(void)
+{
+	// Enable UART0
+	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_UART0))
+		;
+
+	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOA))
+		;
+
+	// Configure IO pins
+	GPIOPinConfigure(GPIO_PA0_U0RX);
+	GPIOPinConfigure(GPIO_PA1_U0TX);
+	ROM_GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+
+	// Configure baud rate
+	ROM_UARTConfigSetExpClk(UART0_BASE, g_ui32SysClock, 115200,
+		(UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
+		 UART_CONFIG_PAR_NONE));
+}
+
+static void gpio_init(void)
+{
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOG);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOH);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOJ);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOL);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOM);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPION);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOP);
+    ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOQ);
+
+    // PD6 - Disable USB
+    ROM_GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, GPIO_PIN_6);
+	MAP_GPIOPadConfigSet(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_STRENGTH_2MA,
+						 GPIO_PIN_TYPE_STD_WPD);
+
+    // PJ0/1 are user buttons
+    ROM_GPIOPinTypeGPIOInput(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    MAP_GPIOPadConfigSet(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1,
+						 GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+    ROM_GPIOPinWrite(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1, 0);
+
+    // PN0/1 are user LED's
+    ROM_GPIOPinTypeGPIOOutput(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+	MAP_GPIOPadConfigSet(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1,
+						 GPIO_STRENGTH_12MA, GPIO_PIN_TYPE_STD);
+	ROM_GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0 | GPIO_PIN_1, 0);
+
+	// PF0/4 are user LED's
+	ROM_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_0 | GPIO_PIN_4);
+	ROM_GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_0 | GPIO_PIN_4, 0);
+	MAP_GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_0 | GPIO_PIN_4,
+						 GPIO_STRENGTH_12MA, GPIO_PIN_TYPE_STD);
+
+	// ------------------------------------------------------------------------
+
+	// D0:D7
+	ROM_GPIOPinTypeGPIOInput(GPIO_PORTM_BASE, 0xFFU);
+
+	// VSYNC
+	ROM_GPIOPinTypeGPIOInput(GPIO_PORTP_BASE, GPIO_PIN_0);
+
+	// HREF
+	ROM_GPIOPinTypeGPIOInput(GPIO_PORTQ_BASE, GPIO_PIN_0);
+
+	// PCLK
+	ROM_GPIOPinTypeGPIOInput(GPIO_PORTK_BASE, GPIO_PIN_0);
+
+	// Reset
+	ROM_GPIOPinTypeGPIOOutput(GPIO_PORTG_BASE, GPIO_PIN_0);
+	ROM_GPIOPinWrite(GPIO_PORTG_BASE, GPIO_PIN_0, 0);
+
+	// PWDN
+	ROM_GPIOPinTypeGPIOOutput(GPIO_PORTG_BASE, GPIO_PIN_1);
+	ROM_GPIOPinWrite(GPIO_PORTG_BASE, GPIO_PIN_1, GPIO_PIN_1);
+}
+
+static void isr_init(void)
+{
+
+}
+
+static void dma_init(void)
+{
+
+}
+
+void uart_puts(char * str)
+{
+	while (*str)
+	{
+		ROM_UARTCharPut(UART0_BASE, *str);
+		str++;
+	}
+}
+
+void uart_putc(char c)
+{
+	ROM_UARTCharPut(UART0_BASE, c);
+}
+
+uint32_t i2c_rx(uint8_t reg)
+{
+	uint32_t err;
+
+	while(i2c_master_busy(I2C5_BASE))
+		;
+
+	I2CMasterSlaveAddrSet(I2C5_BASE, 0x21, false);
+
+	I2CMasterDataPut(I2C5_BASE, reg);
+
+	I2CMasterControl(I2C5_BASE, I2C_MASTER_CMD_SINGLE_SEND);
+
+	SysCtlDelay(20000);
+
+	while(i2c_master_busy(I2C5_BASE))
+		;
+
+	err = i2c_master_err(I2C5_BASE);
+
+	if (err)
+	{
+		uart_puts("Err = ");
+		uart_put_u32h(err);
+		uart_puts("\r\n");
+		return 0;
+	}
+
+	I2CMasterSlaveAddrSet(I2C5_BASE, 0x21, true);
+
+	I2CMasterControl(I2C5_BASE, I2C_MASTER_CMD_SINGLE_RECEIVE);
+
+	SysCtlDelay(20000);
+
+	while(i2c_master_busy(I2C5_BASE))
+		;
+
+	err = i2c_master_err(I2C5_BASE);
+
+	if (err)
+	{
+		uart_puts("Err = ");
+		uart_put_u32h(err);
+		uart_puts("\r\n");
+		return 0;
+	}
+
+	return I2CMasterDataGet(I2C5_BASE);
+}
+
+void uart_put_u32h(uint32_t w)
+{
+	int i;
+	int tmp;
+
+	for(i = 0; i < 8; i++)
+	{
+		tmp = (w >> ((7-i)*4)) & 0xF;
+		if (tmp > 9)
+			tmp += 0x41 - 0xA;
+		else
+			tmp += 0x30;
+		uart_putc(tmp);
+	}
+}
+
+void uart_put_u16h(uint16_t w)
+{
+	int i;
+	int tmp;
+
+	for(i = 0; i < 4; i++)
+	{
+		tmp = (w >> ((3-i)*4)) & 0xF;
+		if (tmp > 9)
+			tmp += 0x41 - 0xA;
+		else
+			tmp += 0x30;
+		uart_putc(tmp);
+	}
+}
+
+void uart_put_u8h(uint8_t w)
+{
+	int i;
+	int tmp;
+
+	for(i = 0; i < 2; i++)
+	{
+		tmp = (w >> ((1-i)*4)) & 0xF;
+		if (tmp > 9)
+			tmp += 0x41 - 0xA;
+		else
+			tmp += 0x30;
+		uart_putc(tmp);
+	}
+}
+
+bool i2c_master_busy(uint32_t base)
+{
+	i2c_mcs = HWREG(base + I2C_O_MCS);
+
+	if (i2c_mcs & I2C_MCS_BUSY)
+		return true;
+	else
+		return false;
+}
+
+uint32_t i2c_master_err(uint32_t base)
+{
+	volatile uint32_t tmp;
+
+	if(i2c_mcs & I2C_MCS_BUSY)
+	{
+		return(I2C_MASTER_ERR_NONE);
+	}
+
+	//
+	// Check for errors.
+	//
+
+	if(i2c_mcs & (I2C_MCS_ERROR | I2C_MCS_ARBLST))
+	{
+		tmp = HWREG(base + I2C_O_MCS);
+		return(i2c_mcs & (I2C_MCS_ARBLST | I2C_MCS_DATACK | I2C_MCS_ADRACK));
+	}
+	else
+	{
+		return(I2C_MASTER_ERR_NONE);
+	}
+}
+
+static void pwm_init(void)
+{
+	// Configure IO pins
+	GPIOPinConfigure(GPIO_PF1_M0PWM1);
+	GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_1);
+
+	ROM_SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM0);
+	PWMClockSet(PWM0_BASE, PWM_SYSCLK_DIV_1);
+
+	PWMGenConfigure(PWM0_BASE, PWM_GEN_0, PWM_GEN_MODE_DOWN | PWM_GEN_MODE_NO_SYNC);
+
+	PWMGenPeriodSet(PWM0_BASE, PWM_GEN_0, 8);
+	PWMPulseWidthSet(PWM0_BASE, PWM_OUT_1, PWMGenPeriodGet(PWM0_BASE, PWM_GEN_0) / 2);
+	PWMOutputState(PWM0_BASE, PWM_OUT_1_BIT, true);
+	PWMGenEnable(PWM0_BASE, PWM_GEN_0);
+}
+
+
+void i2c_start(void)
+{
+	GPIOPinWrite(I2C_PORT_BASE, I2C_DATA|I2C_CLK, I2C_DATA|I2C_CLK);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0x0);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, 0x0);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+}
+
+void i2c_stop(void)
+{
+	GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, I2C_CLK);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, I2C_DATA);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+}
+
+void i2c_write_bit(uint8_t x)
+{
+#if 0
+	if (x)
+		GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0x1);
+	else
+		GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0x0);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, 0x1);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, 0x0);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	if (x)
+	{
+		GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0x0);
+		SysCtlDelay(I2C_DELAY_BIT_BANG);
+	}
+#else
+	if (x)
+		GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, I2C_DATA);
+	else
+		GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0x0);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, I2C_CLK);
+	while(GPIOPinRead(I2C_PORT_BASE, I2C_CLK) == 0x0)
+		;
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, 0x0);
+
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	if (x)
+	{
+		//GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0x0);
+		//SysCtlDelay(I2C_DELAY_BIT_BANG);
+	}
+#endif
+
+}
+
+uint8_t i2c_read_bit(void)
+{
+	uint8_t ret;
+#if 0
+	GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, 0x1);
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, 0x1);
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	if (GPIOPinRead(I2C_PORT_BASE, I2C_DATA))
+		ret = 1;
+	else
+		ret = 0;
+
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, 0x0);
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+#else
+	GPIOPinWrite(I2C_PORT_BASE, I2C_DATA, I2C_DATA);
+	GPIOPinTypeGPIOInput(I2C_PORT_BASE, I2C_DATA);
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, I2C_CLK);
+	GPIOPinTypeGPIOInput(I2C_PORT_BASE, I2C_CLK);
+	while((GPIOPinRead(I2C_PORT_BASE, I2C_CLK) & I2C_CLK) == 0x0)
+		;
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	if (GPIOPinRead(I2C_PORT_BASE, I2C_DATA) & I2C_DATA)
+		ret = 1;
+	else
+		ret = 0;
+
+	GPIOPinTypeGPIOOutputOD(I2C_PORT_BASE, I2C_CLK);
+	GPIOPinWrite(I2C_PORT_BASE, I2C_CLK, 0x0);
+	GPIOPinTypeGPIOOutputOD(I2C_PORT_BASE, I2C_DATA);
+	SysCtlDelay(I2C_DELAY_BIT_BANG);
+#endif
+
+	return ret;
+}
+
+bool i2c_write(uint8_t c)
+{
+	int i;
+	bool ret;
+
+	for(i = 0; i < 8; i++)
+	{
+		i2c_write_bit(c & 0x80);
+		c <<= 1;
+	}
+
+	ret = i2c_read_bit();
+
+	return !ret;
+}
+
+uint8_t i2c_read(uint8_t ack)
+{
+	int i;
+	uint8_t ret;
+
+	ret = 0;
+	for(i = 0; i < 8; i++)
+	{
+		ret <<= 1;
+		ret |= i2c_read_bit();
+	}
+
+	if (ack)
+		i2c_write_bit(0);
+	else
+		i2c_write_bit(1);
+	//SysCtlDelay(I2C_DELAY_BIT_BANG);
+
+	return ret;
+}
+
+uint8_t read_sccb(uint8_t reg)
+{
+	uint8_t ret = 0;
+
+	i2c_start();
+
+	if (i2c_write(0x42))
+	{
+
+		if (i2c_write(reg))
+		{
+
+			i2c_stop();
+
+			i2c_start();
+
+			if (i2c_write(0x43))
+			{
+
+				ret = i2c_read(1);
+			}
+
+			i2c_stop();
+		}
+		else
+		{
+			i2c_stop();
+		}
+	}
+	else
+	{
+		i2c_stop();
+	}
+
+
+	return ret;
+}

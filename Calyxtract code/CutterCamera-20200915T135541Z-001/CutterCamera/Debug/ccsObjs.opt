@@ -1,0 +1,1 @@
+"./arduinon_checkMotor/arduinon_checkMotor.obj" "./source/driver/dbg.obj" "./source/driver/encoder.obj" "./source/driver/hardware.obj" "./source/driver/motor.obj" "./source/driver/ov7725.obj" "./source/main.obj" "./source/tm4c1294ncpdt_startup_ccs.obj" "../tm4c1294ncpdt.cmd" -llibc.a 

@@ -1,0 +1,157 @@
+/*
+ * main.c
+ */
+
+#include "driver/dbg.h"
+#include "driver/ov7725.h"
+#include "driver/motor.h"
+#include "driver/hardware.h"
+#define TARGET_IS_TM4C129_RA1
+#include "inc/hw_types.h"
+#include "inc/hw_memmap.h"
+#include "driverlib/rom.h"
+#include "driverlib/rom_map.h"
+
+#define I2C_DELAY_BIT_BANG		500000
+
+uint8_t qvga_frame[320*240*2];
+
+void main(void)
+{
+	hw_basic_init();
+	dbg_printf("Cutter Camera\r\n");
+
+	hw_init();
+
+	void dbg(void);
+	dbg();
+
+	while(1)
+		;
+
+}
+
+void dbg(void)
+{
+	int i;
+
+	dbg_printf("Ready.\r\n");
+
+	uint32_t c;
+	uint8_t cmd[5];
+	uint8_t wr_cnt = 0;
+	uint8_t rd_cnt = 0;
+	bool tmp1;
+	uint16_t st1;
+	uint16_t st2;
+
+	while (1)
+	{
+		uint8_t addr;
+		uint8_t val;
+
+		c = ROM_UARTCharGet(UART0_BASE);
+		switch (c)
+		{
+			case '^':
+				++wr_cnt;
+				break;
+
+			case '*':
+			    ++rd_cnt;
+			    break;
+
+			case '$':
+				//ov7725_dma_read_frame(qvga_frame);
+				ov7725_setup_frame_buf(qvga_frame);
+				while (!ov7725_is_image_acquired())
+					;
+				for (i = 0; i < 320*2*240; i++)
+					ROM_UARTCharPut(UART0_BASE, qvga_frame[i]);
+				dbg_printf("$\r\n");
+				break;
+
+			case '#':
+				do
+				{
+				    ov7725_setup_frame_buf(qvga_frame);
+				} while(!ov7725_detect());
+				for (i = 0; i < 320*2*240; i++)
+					ROM_UARTCharPut(UART0_BASE, qvga_frame[i]);
+				dbg_printf("$\r\n");
+				break;
+
+			case '!':
+				motor_start();
+				break;
+
+			default:
+				if (wr_cnt)
+				{
+					cmd[wr_cnt-1] = c;
+					if (++wr_cnt > 5)
+					{
+						if (cmd[2] != '=')
+						{
+							wr_cnt = 0;
+						}
+						else
+						{
+							if (cmd[0] > 0x39)
+								addr = (cmd[0] - 0x41 + 0xA) << 4;
+							else
+								addr = (cmd[0] - 0x30) << 4;
+							if (cmd[1] > 0x39)
+								addr |= (cmd[1] - 0x41 + 0xA);
+							else
+								addr |= (cmd[1] - 0x30);
+
+							if (cmd[3] > 0x39)
+								val = (cmd[3] - 0x41 + 0xA) << 4;
+							else
+								val = (cmd[3] - 0x30) << 4;
+							if (cmd[4] > 0x39)
+								val |= (cmd[4] - 0x41 + 0xA);
+							else
+								val |= (cmd[4] - 0x30);
+
+							dbg_printf("%02X=%02X\r\n", addr, val);
+							ov7725_write_reg(addr, val);
+							wr_cnt = 0;
+							rd_cnt = 0;
+						}
+					}
+				}
+				else
+				{
+					wr_cnt = 0;
+				}
+
+				if (rd_cnt)
+				{
+				    cmd[rd_cnt-1] = c;
+                    if (++rd_cnt > 3)
+                    {
+                        if (cmd[0] > 0x39)
+                            addr = (cmd[0] - 0x41 + 0xA) << 4;
+                        else
+                            addr = (cmd[0] - 0x30) << 4;
+                        if (cmd[1] > 0x39)
+                            addr |= (cmd[1] - 0x41 + 0xA);
+                        else
+                            addr |= (cmd[1] - 0x30);
+                        val = ov7725_read_reg(addr);
+                        dbg_printf("%02X=%02X\r\n", addr, val);
+                        rd_cnt = 0;
+                        wr_cnt = 0;
+                    }
+				}
+				else
+				{
+				    rd_cnt = 0;
+				}
+				break;
+		}
+	}
+}
+
